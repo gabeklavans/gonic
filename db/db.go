@@ -55,6 +55,7 @@ func New(path string, options url.Values) (*DB, error) {
 	}
 	db.SetLogger(log.New(os.Stdout, "gorm ", 0))
 	db.DB().SetMaxOpenConns(1)
+	db = db.Debug()
 	return &DB{DB: db}, nil
 }
 
