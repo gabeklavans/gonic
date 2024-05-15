@@ -23,6 +23,7 @@ import (
 
 	"go.senan.xyz/gonic/db"
 	"go.senan.xyz/gonic/fileutil"
+	"go.senan.xyz/gonic/scanner/ctime"
 	"go.senan.xyz/gonic/tags/tagcommon"
 )
 
@@ -363,7 +364,7 @@ func (s *Scanner) populateTrackAndArtists(tx *db.DB, st *State, i int, album *db
 			return fmt.Errorf("populate track artists: %w", err)
 		}
 
-		if err := populateAlbum(tx, album, trags, stat.ModTime()); err != nil {
+		if err := populateAlbum(tx, album, trags, stat.ModTime(), ctime.CreateTime(stat)); err != nil {
 			return fmt.Errorf("populate album: %w", err)
 		}
 
@@ -402,7 +403,7 @@ func (s *Scanner) populateTrackAndArtists(tx *db.DB, st *State, i int, album *db
 	return nil
 }
 
-func populateAlbum(tx *db.DB, album *db.Album, trags tagcommon.Info, modTime time.Time) error {
+func populateAlbum(tx *db.DB, album *db.Album, trags tagcommon.Info, modTime, createTime time.Time) error {
 	albumName := tagcommon.MustAlbum(trags)
 	album.TagTitle = albumName
 	album.TagTitleUDec = decoded(albumName)
@@ -411,8 +412,8 @@ func populateAlbum(tx *db.DB, album *db.Album, trags tagcommon.Info, modTime tim
 	album.TagYear = trags.Year()
 
 	album.ModifiedAt = modTime
-	if album.CreatedAt.After(modTime) {
-		album.CreatedAt = modTime // reset created at to match filesytem for new albums
+	if album.CreatedAt.After(createTime) {
+		album.CreatedAt = createTime // reset created at to match filesytem for new albums
 	}
 
 	if err := tx.Save(&album).Error; err != nil {
