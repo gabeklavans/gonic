@@ -87,6 +87,7 @@ func (db *DB) Migrate(ctx MigrationContext) error {
 		construct(ctx, "202604231200", migrateAddTrackContributors),
 		construct(ctx, "202604280000", migrateAddCreditedAs),
 		construct(ctx, "202604281200", migrateUnifyCredits),
+		construct(ctx, "202605021200", migrateAddTrackIsrc),
 	}
 
 	return gormigrate.
@@ -937,4 +938,19 @@ func migrateAddTrackYear(tx *gorm.DB, _ MigrationContext) error {
 	}
 
 	return nil
+}
+
+func migrateAddTrackIsrc(tx *gorm.DB, _ MigrationContext) error {
+	step := tx.AutoMigrate(
+		Track{},
+		ISRC{},
+		TrackISRC{},
+	)
+	if err := step.Error; err != nil {
+		return fmt.Errorf("step auto migrate track for ISRC addition: %w", err)
+	}
+
+	return tx.Exec(`
+		CREATE INDEX idx_track_isrcs_id ON "track_isrcs" (isrc_id);
+		`).Error
 }

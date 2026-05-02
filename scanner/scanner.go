@@ -114,6 +114,9 @@ func (s *Scanner) ScanAndClean(opts ScanOptions) (*State, error) {
 	if err := s.cleanGenres(st); err != nil {
 		return nil, fmt.Errorf("clean genres: %w", err)
 	}
+	if err := s.cleanISRCs(st); err != nil {
+		return nil, fmt.Errorf("clean ISRCs: %w", err)
+	}
 	if err := s.cleanBookmarks(st); err != nil {
 		return nil, fmt.Errorf("clean bookmarks: %w", err)
 	}
@@ -416,6 +419,12 @@ func (s *Scanner) populateTrackAndArtists(tx *db.DB, st *State, i int, album *db
 		return fmt.Errorf("populate genres: %w", err)
 	}
 
+	isrcs := ParseMulti(s.multiValueSettings[ISRC], normtag.Values(trags, normtag.ISRC), normtag.Get(trags, normtag.ISRC))
+	isrcIDs, err := populateISRCs(tx, isrcs)
+	if err != nil {
+		return fmt.Errorf("populate ISRCs: %w", err)
+	}
+
 	// metadata for the album table comes only from the first track's tags
 	if i == 0 {
 		if err := tx.Where("album_id=?", album.ID).Delete(db.AlbumCredit{}).Error; err != nil {
@@ -465,6 +474,9 @@ func (s *Scanner) populateTrackAndArtists(tx *db.DB, st *State, i int, album *db
 	}
 	if err := populateTrackGenres(tx, track, genreIDs); err != nil {
 		return fmt.Errorf("populate track genres: %w", err)
+	}
+	if err := populateTrackISRCs(tx, track, isrcIDs); err != nil {
+		return fmt.Errorf("populate track ISRCs: %w", err)
 	}
 
 	if err := tx.Where("track_id=?", track.ID).Delete(db.TrackCredit{}).Error; err != nil {
@@ -641,6 +653,27 @@ func populateGenres(tx *db.DB, names []string) ([]int, error) {
 	return ids, nil
 }
 
+func populateISRCs(tx *db.DB, isrcValues []string) ([]int, error) {
+	var filteredIsrcValues []string
+	for _, isrcValue := range isrcValues {
+		if clean := strings.TrimSpace(isrcValue); clean != "" {
+			filteredIsrcValues = append(filteredIsrcValues, clean)
+		}
+	}
+	if len(filteredIsrcValues) == 0 {
+		return []int{}, nil
+	}
+	var ids []int
+	for _, isrcValue := range filteredIsrcValues {
+		var isrc db.ISRC
+		if err := tx.FirstOrCreate(&isrc, db.ISRC{Value: isrcValue}).Error; err != nil {
+			return nil, fmt.Errorf("find or create ISRC: %w", err)
+		}
+		ids = append(ids, isrc.ID)
+	}
+	return ids, nil
+}
+
 func populateTrackGenres(tx *db.DB, track *db.Track, genreIDs []int) error {
 	if err := tx.Where("track_id=?", track.ID).Delete(db.TrackGenre{}).Error; err != nil {
 		return fmt.Errorf("delete old track genre records: %w", err)
@@ -648,6 +681,17 @@ func populateTrackGenres(tx *db.DB, track *db.Track, genreIDs []int) error {
 
 	if err := tx.InsertBulkLeftMany("track_genres", []string{"track_id", "genre_id"}, track.ID, genreIDs); err != nil {
 		return fmt.Errorf("insert bulk track genres: %w", err)
+	}
+	return nil
+}
+
+func populateTrackISRCs(tx *db.DB, track *db.Track, isrcIDs []int) error {
+	if err := tx.Where("track_id=?", track.ID).Delete(db.TrackISRC{}).Error; err != nil {
+		return fmt.Errorf("delete old track ISRCs records: %w", err)
+	}
+
+	if err := tx.InsertBulkLeftMany("track_isrcs", []string{"track_id", "isrc_id"}, track.ID, isrcIDs); err != nil {
+		return fmt.Errorf("insert bulk track ISRCs: %w", err)
 	}
 	return nil
 }
@@ -891,6 +935,24 @@ func (s *Scanner) cleanGenres(st *State) error { //nolint:unparam
 	return nil
 }
 
+func (s *Scanner) cleanISRCs(st *State) error {
+	start := time.Now()
+	defer func() { log.Printf("finished clean isrcs in %s, %d removed", durSince(start), st.ISRCsMissing()) }()
+
+	subTrack := s.db.
+		Select("isrcs.id").
+		Model(db.ISRC{}).
+		Joins("LEFT JOIN track_isrcs ON track_isrcs.isrc_id=isrcs.id").
+		Where("track_isrcs.isrc_id IS NULL").
+		SubQuery()
+	q := s.db.
+		Where("isrcs.id IN ?", subTrack).
+		Delete(db.ISRC{})
+	st.isrcsMissing += int(q.RowsAffected)
+
+	return nil
+}
+
 func (s *Scanner) cleanBookmarks(st *State) error {
 	start := time.Now()
 	defer func() {
@@ -948,6 +1010,7 @@ type State struct {
 	albumsMissing    []int64
 	artistsMissing   int
 	genresMissing    int
+	isrcsMissing     int
 	bookmarksRemoved int
 }
 
@@ -959,6 +1022,7 @@ func (s *State) TracksMissing() int    { return len(s.tracksMissing) }
 func (s *State) AlbumsMissing() int    { return len(s.albumsMissing) }
 func (s *State) ArtistsMissing() int   { return s.artistsMissing }
 func (s *State) GenresMissing() int    { return s.genresMissing }
+func (s *State) ISRCsMissing() int     { return s.isrcsMissing }
 func (s *State) BookmarksRemoved() int { return s.bookmarksRemoved }
 
 type MultiValueMode uint8
@@ -975,6 +1039,7 @@ const (
 	Genre Tag = iota
 	Artist
 	AlbumArtist
+	ISRC
 )
 
 type MultiValueSetting struct {

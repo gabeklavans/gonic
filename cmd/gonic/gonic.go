@@ -84,10 +84,11 @@ func main() {
 
 	confExcludePattern := flag.String("exclude-pattern", "", "regex pattern to exclude files from scan (optional)")
 
-	var confMultiValueGenre, confMultiValueArtist, confMultiValueAlbumArtist multiValueSetting
+	var confMultiValueGenre, confMultiValueArtist, confMultiValueAlbumArtist, confMultiValueISRC multiValueSetting
 	flag.Var(&confMultiValueGenre, "multi-value-genre", "setting for multi-valued genre scanning (optional)")
 	flag.Var(&confMultiValueArtist, "multi-value-artist", "setting for multi-valued track artist scanning (optional)")
 	flag.Var(&confMultiValueAlbumArtist, "multi-value-album-artist", "setting for multi-valued album artist scanning (optional)")
+	flag.Var(&confMultiValueISRC, "multi-value-isrc", "setting for multi-valued isrc scanning (optional)")
 
 	confPprof := flag.Bool("pprof", false, "enable the /debug/pprof endpoint (optional)")
 	confExpvar := flag.Bool("expvar", false, "enable the /debug/vars endpoint (optional)")
@@ -196,6 +197,7 @@ func main() {
 			scanner.Genre:       scanner.MultiValueSetting(confMultiValueGenre),
 			scanner.Artist:      scanner.MultiValueSetting(confMultiValueArtist),
 			scanner.AlbumArtist: scanner.MultiValueSetting(confMultiValueAlbumArtist),
+			scanner.ISRC:        scanner.MultiValueSetting(confMultiValueISRC),
 		},
 		tagReader,
 		*confExcludePattern,
