@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bube054/validatorgo"
 	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 
@@ -187,6 +188,7 @@ func (c *Controller) ServeSearchTwo(r *http.Request) *spec.Response {
 	}
 
 	var isUUID = uuid.Validate(query) == nil
+	var isISRC = validatorgo.IsISRC(query, false)
 	var isAll = query == `""`
 
 	var fuzzy = query
@@ -254,6 +256,11 @@ func (c *Controller) ServeSearchTwo(r *http.Request) *spec.Response {
 	switch {
 	case isUUID:
 		q = q.Where(`tag_brainz_id = ?`, query)
+	case isISRC:
+		q = q.
+			Joins("JOIN track_isrcs ON track_isrcs.track_id=tracks.id").
+			Joins("JOIN isrcs ON track_isrcs.isrc_id=isrcs.id").
+			Where(`isrcs.value = ?`, query)
 	case isAll:
 	default:
 		q = q.Where(`filename LIKE ?`, fuzzy)

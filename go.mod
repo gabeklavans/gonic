@@ -6,6 +6,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/andybalholm/cascadia v1.3.3
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
+	github.com/bube054/validatorgo v0.3.2
 	github.com/dexterlb/mpvipc v0.0.0-20241005113212-7cdefca0e933
 	github.com/disintegration/imaging v1.6.2
 	github.com/djherbis/times v1.6.0
